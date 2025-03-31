@@ -1,4 +1,4 @@
-name: Deploy
+name: Deploy FastAPI App
 
 on:
   push:
@@ -31,9 +31,15 @@ jobs:
             # Install dependencies
             sudo apt-get update -y
             sudo apt-get install -y python3 python3-pip
-            pip3 install -r /home/azureuser/app/requirements.txt
 
-            # Create systemd service file
+            # Setup virtual environment
+            cd /home/azureuser/app
+            python3 -m venv venv
+            source venv/bin/activate
+            pip install --upgrade pip
+            pip install -r requirements.txt
+
+            # Create Systemd service file
             sudo bash -c 'cat > /etc/systemd/system/fastapi.service <<EOF
             [Unit]
             Description=FastAPI Service
@@ -42,24 +48,19 @@ jobs:
             [Service]
             User=azureuser
             WorkingDirectory=/home/azureuser/app
-            ExecStart=/usr/bin/python3 -m uvicorn main:app --host 0.0.0.0 --port 80
+            ExecStart=/home/azureuser/app/venv/bin/uvicorn main:app --host 0.0.0.0 --port 80
             Restart=always
 
             [Install]
             WantedBy=multi-user.target
             EOF'
 
-            # Reload systemd and start service
+            # Reload and start the service
             sudo chmod 644 /etc/systemd/system/fastapi.service
             sudo systemctl daemon-reload
             sudo systemctl enable fastapi.service
             sudo systemctl restart fastapi.service
 
-            # Open firewall ports
-            sudo ufw allow 80/tcp
-            sudo ufw allow OpenSSH
-            sudo ufw reload
-            sudo ufw status
-
-            # Check if FastAPI is running
+            # Debugging
             sudo systemctl status fastapi.service || true
+            journalctl -u fastapi.service -n 50 --no-pager
