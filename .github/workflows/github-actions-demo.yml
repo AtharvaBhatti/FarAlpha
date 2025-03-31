@@ -42,18 +42,22 @@ jobs:
             [Service]
             User=azureuser
             WorkingDirectory=/home/azureuser/app
-            ExecStart=/usr/local/bin/uvicorn main:app --host 0.0.0.0 --port 80
+            ExecStart=/usr/bin/python3 -m uvicorn main:app --host 0.0.0.0 --port 80
             Restart=always
 
             [Install]
             WantedBy=multi-user.target
             EOF'
 
+            # Set permissions
+            sudo chmod 644 /etc/systemd/system/fastapi.service
+
             # Reload Systemd and start service
             sudo systemctl daemon-reload
             sudo systemctl enable fastapi.service
-            sudo systemctl start fastapi.service  # Use "start" instead of "restart"
+            sudo systemctl restart fastapi.service  # Restart instead of start
 
             # Debugging: Verify service file exists
             ls -l /etc/systemd/system/fastapi.service
             sudo systemctl status fastapi.service || true
+            sudo journalctl -u fastapi.service --no-pager | tail -20  # View logs
