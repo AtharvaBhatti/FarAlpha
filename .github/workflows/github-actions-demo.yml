@@ -28,48 +28,38 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
           script: |
-            # Fix permissions
-            sudo chown -R azureuser:azureuser /home/azureuser/app
-            sudo chmod 755 /home/azureuser/app
-
             # Install dependencies
             sudo apt-get update -y
             sudo apt-get install -y python3 python3-pip
-            pip3 install --user -r /home/azureuser/app/requirements.txt
+            pip3 install -r /home/azureuser/app/requirements.txt
 
-            # Verify uvicorn installation
-            echo "=== Uvicorn Path Check ==="
-            /home/azureuser/.local/bin/uvicorn --version || true
-
-            # Create Systemd service file with absolute paths
+            # Create systemd service file
             sudo bash -c 'cat > /etc/systemd/system/fastapi.service <<EOF
             [Unit]
             Description=FastAPI Service
             After=network.target
 
             [Service]
-            Type=simple
             User=azureuser
             WorkingDirectory=/home/azureuser/app
-            Environment="PATH=/home/azureuser/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
             ExecStart=/usr/bin/python3 -m uvicorn main:app --host 0.0.0.0 --port 80
             Restart=always
-            RestartSec=5s
-            TimeoutStartSec=30
 
             [Install]
             WantedBy=multi-user.target
             EOF'
 
-            # Reload and restart service
+            # Reload systemd and start service
+            sudo chmod 644 /etc/systemd/system/fastapi.service
             sudo systemctl daemon-reload
             sudo systemctl enable fastapi.service
             sudo systemctl restart fastapi.service
 
-            # Debugging outputs
-            echo "\n=== Service Status ==="
-            sudo systemctl status fastapi.service --no-pager || true
-            echo "\n=== Recent Logs ==="
-            sudo journalctl -u fastapi.service -n 20 --no-pager
-            echo "\n=== Uvicorn Process Check ==="
-            pgrep -af uvicorn || true
+            # Open firewall ports
+            sudo ufw allow 80/tcp
+            sudo ufw allow OpenSSH
+            sudo ufw reload
+            sudo ufw status
+
+            # Check if FastAPI is running
+            sudo systemctl status fastapi.service || true
