@@ -1,16 +1,15 @@
 from fastapi import FastAPI
-from pydantic import BaseModel
 import uvicorn
 
 app = FastAPI()
 
 @app.get("/")
 async def read_root():
-    return {"status" : "Online"}
+    return {"status": "Online"}
 
 @app.get("/sayHello")
-async def simple():
-    return { "message" : "Hello User"}
+async def say_hello():
+    return {"message": "Hello User"}
 
 if __name__ == "__main__":
-    uvicorn.run(app)
+    uvicorn.run(app, host="0.0.0.0", port=80)
