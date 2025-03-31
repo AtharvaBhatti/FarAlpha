@@ -13,5 +13,4 @@ async def simple():
     return { "message" : "Hello User"}
 
 if __name__ == "__main__":
-    PORT = 80
-    uvicorn.run(app, host="127.0.0.1", port=PORT)
+    uvicorn.run(app)
