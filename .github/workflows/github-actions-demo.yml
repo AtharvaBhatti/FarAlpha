@@ -28,36 +28,43 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
           script: |
+            # Fix directory permissions first
+            sudo chown -R azureuser:azureuser /home/azureuser/app
+
             # Install dependencies
             sudo apt-get update -y
             sudo apt-get install -y python3 python3-pip
-            pip3 install -r /home/azureuser/app/requirements.txt
+            pip3 install --user -r /home/azureuser/app/requirements.txt
 
-            # Create Systemd service file (fixed syntax)
+            # Create Systemd service with PATH specification
             sudo bash -c 'cat > /etc/systemd/system/fastapi.service <<EOF
             [Unit]
             Description=FastAPI Service
             After=network.target
+            StartLimitIntervalSec=0
 
             [Service]
+            Type=simple
             User=azureuser
             WorkingDirectory=/home/azureuser/app
+            Environment="PATH=/home/azureuser/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
             ExecStart=/usr/bin/python3 -m uvicorn main:app --host 0.0.0.0 --port 80
             Restart=always
+            RestartSec=5
 
             [Install]
             WantedBy=multi-user.target
             EOF'
 
-            # Set permissions
-            sudo chmod 644 /etc/systemd/system/fastapi.service
-
-            # Reload Systemd and start service
+            # Reload and enable service
             sudo systemctl daemon-reload
             sudo systemctl enable fastapi.service
-            sudo systemctl restart fastapi.service  # Restart instead of start
+            sudo systemctl restart fastapi.service
 
-            # Debugging: Verify service file exists
-            ls -l /etc/systemd/system/fastapi.service
-            sudo systemctl status fastapi.service || true
-            sudo journalctl -u fastapi.service --no-pager | tail -20  # View logs
+            # Enhanced debugging
+            echo "=== Service Status ==="
+            sudo systemctl status fastapi.service --no-pager || true
+            echo "\n=== Last 50 Log Lines ==="
+            sudo journalctl -u fastapi.service -n 50 --no-pager
+            echo "\n=== Port 80 Check ==="
+            sudo netstat -tulpn | grep :80
