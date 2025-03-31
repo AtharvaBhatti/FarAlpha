@@ -28,43 +28,55 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
           script: |
-            # Fix directory permissions first
+            # Debug: Check directory permissions
+            echo "=== Checking Permissions ==="
+            ls -ld /home/azureuser/app
+
+            # Forcefully reset ownership
             sudo chown -R azureuser:azureuser /home/azureuser/app
 
-            # Install dependencies
+            # Install Python and dependencies globally (remove --user)
+            echo "=== Installing Dependencies ==="
             sudo apt-get update -y
             sudo apt-get install -y python3 python3-pip
-            pip3 install --user -r /home/azureuser/app/requirements.txt
+            pip3 install --no-warn-script-location -r /home/azureuser/app/requirements.txt
 
-            # Create Systemd service with PATH specification
+            # Verify uvicorn installation
+            echo "=== Uvicorn Path ==="
+            which uvicorn || true
+            /usr/local/bin/uvicorn --version || true
+
+            # Create Systemd service with explicit paths
+            echo "=== Creating Service File ==="
             sudo bash -c 'cat > /etc/systemd/system/fastapi.service <<EOF
             [Unit]
             Description=FastAPI Service
             After=network.target
-            StartLimitIntervalSec=0
 
             [Service]
-            Type=simple
             User=azureuser
             WorkingDirectory=/home/azureuser/app
-            Environment="PATH=/home/azureuser/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-            ExecStart=/usr/bin/python3 -m uvicorn main:app --host 0.0.0.0 --port 80
+            Environment="PATH=/home/azureuser/.local/bin:/usr/local/bin:/usr/bin:/bin"
+            ExecStart=/usr/local/bin/uvicorn main:app --host 0.0.0.0 --port 80
             Restart=always
-            RestartSec=5
+            RestartSec=5s
 
             [Install]
             WantedBy=multi-user.target
             EOF'
 
-            # Reload and enable service
+            # Reload and restart service
+            echo "=== Starting Service ==="
             sudo systemctl daemon-reload
             sudo systemctl enable fastapi.service
             sudo systemctl restart fastapi.service
 
-            # Enhanced debugging
-            echo "=== Service Status ==="
+            # Aggressive debugging
+            echo "\n=== Service Status ==="
             sudo systemctl status fastapi.service --no-pager || true
-            echo "\n=== Last 50 Log Lines ==="
+            echo "\n=== Service Logs ==="
             sudo journalctl -u fastapi.service -n 50 --no-pager
-            echo "\n=== Port 80 Check ==="
-            sudo netstat -tulpn | grep :80
+            echo "\n=== Port 80 Processes ==="
+            sudo lsof -i :80 || true
+            echo "\n=== Uvicorn Processes ==="
+            ps aux | grep uvicorn || true
