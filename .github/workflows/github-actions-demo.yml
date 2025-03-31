@@ -1,1 +1,53 @@
+name: Deploy
 
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Copy files to VM
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          source: "./"
+          target: "/home/azureuser/app"
+          rm: true
+
+      - name: Deploy Service
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            # Install dependencies
+            sudo apt-get update -y
+            sudo apt-get install -y python3 python3-pip
+            pip3 install -r /home/azureuser/app/requirements.txt
+
+            # Create Systemd service file
+            echo "[Unit]
+            Description=FastAPI Service
+            After=network.target
+
+            [Service]
+            User=azureuser
+            WorkingDirectory=/home/azureuser/app
+            ExecStart=/usr/local/bin/uvicorn main:app --host 0.0.0.0 --port 80
+            Restart=always
+
+            [Install]
+            WantedBy=multi-user.target" | sudo tee /etc/systemd/system/fastapi.service > /dev/null
+
+            # Enable and restart service
+            sudo systemctl daemon-reload
+            sudo systemctl enable fastapi.service
+            sudo systemctl restart fastapi.service
